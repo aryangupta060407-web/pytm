@@ -1,31 +1,64 @@
 {
   "name": "my test tm",
   "description": "Sample threat model of a simple web-based comment system.",
+  "boundaries": [
+    { "name": "Internet" },
+    { "name": "Server/DB", "levels": [2] },
+    { "name": "AWS VPC" }
+  ],
   "elements": [
     {
       "name": "User",
       "type": "Actor",
-      "boundary": "Internet"
+      "boundary": "Internet",
+      "levels": [2]
     },
     {
       "name": "Web Server",
       "type": "Server",
       "os": "Ubuntu",
-      "boundary": "Server/DB"
+      "boundary": "Server/DB",
+      "controls": {
+        "isHardened": true,
+        "sanitizesInput": false,
+        "encodesOutput": true,
+        "authorizesSource": false
+      }
     },
     {
       "name": "SQL Database",
       "type": "Datastore",
       "os": "CentOS",
-      "boundary": "Server/DB"
-    }
-  ],
-  "boundaries": [
-    {
-      "name": "Internet"
+      "boundary": "Server/DB",
+      "datastoreType": "SQL",
+      "inScope": true
     },
     {
-      "name": "Server/DB"
+      "name": "Real Identity Database",
+      "type": "Datastore",
+      "os": "CentOS",
+      "boundary": "Server/DB",
+      "datastoreType": "SQL",
+      "storesPII": true
+    },
+    {
+      "name": "AWS Lambda",
+      "type": "Lambda",
+      "boundary": "AWS VPC"
+    }
+  ],
+  "data": [
+    {
+      "name": "Comments in HTML or Markdown",
+      "classification": "PUBLIC"
+    },
+    {
+      "name": "Insert query with comments",
+      "classification": "PUBLIC"
+    },
+    {
+      "name": "Token verifying user identity",
+      "classification": "SECRET"
     }
   ],
   "flows": [
@@ -34,14 +67,16 @@
       "target": "Web Server",
       "description": "User enters comments",
       "protocol": "HTTP",
-      "port": 80
+      "port": 80,
+      "data": "Comments in HTML or Markdown"
     },
     {
       "source": "Web Server",
       "target": "SQL Database",
       "description": "Insert query with comments",
       "protocol": "MySQL",
-      "port": 3306
+      "port": 3306,
+      "data": "Insert query with comments"
     },
     {
       "source": "SQL Database",
@@ -56,6 +91,21 @@
       "description": "Show comments",
       "protocol": "HTTP",
       "port": 80
+    },
+    {
+      "source": "AWS Lambda",
+      "target": "SQL Database",
+      "description": "Serverless function cleans DB",
+      "protocol": "MySQL",
+      "port": 3306
+    },
+    {
+      "source": "SQL Database",
+      "target": "Real Identity Database",
+      "description": "Verify real user identity",
+      "protocol": "RDA-TCP",
+      "port": 40234,
+      "data": "Token verifying user identity"
     }
   ]
 }
